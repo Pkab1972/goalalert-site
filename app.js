@@ -2,7 +2,7 @@
 var API=(window.GA_API||"").replace(/\/$/,"");
 function pct(a){return a[1]?Math.round(a[0]/a[1]*100)+"%":"—"}
 function esc(s){return String(s).replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c]})}
-function row(l,a){return"<tr><td>"+esc(l)+"</td><td>"+a[0]+" / "+a[1]+"</td><td>"+pct(a)+"</td><td style='width:30%'><div class='bar'><i style='width:"+(a[1]?a[0]/a[1]*100:0)+"%'></i></div></td></tr>"}
+function row(l,a){if(!a[1])return"<tr><td>"+esc(l)+"</td><td colspan='3' class='note'>δεν υπάρχουν ακόμα δεδομένα</td></tr>";return"<tr><td>"+esc(l)+"</td><td>"+a[0]+" / "+a[1]+"</td><td>"+pct(a)+"</td><td style='width:30%'><div class='bar'><i style='width:"+(a[1]?a[0]/a[1]*100:0)+"%'></i></div></td></tr>"}
 function load(cb){
   fetch((API?API+"/":"")+"results.json?t="+Date.now()).then(function(r){return r.json()}).then(cb).catch(function(){cb(null)});
 }
@@ -10,19 +10,23 @@ window.GA_load=load;
 // home summary
 var h=document.getElementById("live-summary");
 if(h)load(function(d){
-  if(!d||d.error){h.innerHTML="<p class='note'>Τα αποτελέσματα φορτώνουν σε λίγο. Δες τη σελίδα <a href='apotelesmata.html'>Αποτελέσματα</a>.</p>";return}
-  var v=d.live_by_verdict||{};
-  h.innerHTML="<div class='grid three'>"+
-   "<div class='card stat'><span>Live σήματα, τελευταίες 30 μέρες</span><b class='big'>"+pct(d.live_total)+"</b><span>"+d.live_total[0]+" από "+d.live_total[1]+" βγήκαν</span></div>"+
-   "<div class='card stat'><span>⭐ Πιο σίγουρο</span><b class='big'>"+pct(v.star||[0,0])+"</b><span>"+(v.star||[0,0])[0]+" από "+(v.star||[0,0])[1]+"</span></div>"+
-   "<div class='card stat'><span>🟡 Μέτριο</span><b class='big'>"+pct(v.mid||[0,0])+"</b><span>"+(v.mid||[0,0])[0]+" από "+(v.mid||[0,0])[1]+"</span></div></div>"+
-   "<p class='note'>Ενημερώθηκε: "+esc(d.updated)+". Δείχνουμε και τα χαμένα. Ποσοστό επιτυχίας δεν σημαίνει κέρδος: δες τον υπολογιστή παρακάτω.</p>";
+  if(!d||d.error){h.innerHTML="<div class='proof'><p class='note' style='margin:0'>Τα αποτελέσματα φορτώνουν σε λίγο. Δες τη σελίδα <a href='apotelesmata.html'>Αποτελέσματα</a>.</p></div>";return}
+  var v=d.live_by_verdict||{},days=(d.live_by_day||[]).slice(-14),mx=1;
+  days.forEach(function(x){if(x.n>mx)mx=x.n});
+  var cols=days.map(function(x){var H=Math.max(14,Math.round(x.n/mx*118)),hp=x.n?x.hits/x.n*100:0;
+    var dd=x.day.slice(8,10)+"/"+x.day.slice(5,7);
+    return "<div class='col' title='"+dd+": "+x.hits+" από "+x.n+" ("+Math.round(hp)+"%)'><div class='stack' style='height:"+H+"px'><i class='m' style='height:"+(100-hp)+"%'></i><i class='h' style='height:"+hp+"%'></i></div><span>"+x.day.slice(8,10)+"</span></div>"}).join("");
+  function mini(l,a){return "<div class='mini'>"+l+"<b>"+(a[1]?pct(a):"—")+"</b>"+(a[1]?a[0]+" από "+a[1]:"δεν υπάρχουν ακόμα δεδομένα")+"</div>"}
+  h.innerHTML="<div class='proof'><div class='proof-top'><div><div class='bignum'>"+pct(d.live_total)+"</div><div class='cap'>βγήκαν από τα τελευταία "+d.live_total[1]+" live σήματα</div></div>"+
+   ((v.star&&v.star[1])||(v.mid&&v.mid[1])?"<div class='minis'>"+mini("⭐ Πιο σίγουρο",v.star||[0,0])+mini("🟡 Μέτριο",v.mid||[0,0])+"</div>":"")+"</div>"+
+   "<div class='days'>"+cols+"</div>"+
+   "<div class='legend'><span><b style='background:var(--pitch)'></b>βγήκαν</span><span><b style='background:var(--miss)'></b>δεν βγήκαν</span><span>Αριθμός ημέρας του μήνα, τελευταίες "+days.length+" μέρες. Ενημερώθηκε "+esc(d.updated)+"</span></div></div>";
 });
 // full results page
 var f=document.getElementById("live-full");
 if(f)load(function(d){
   if(!d||d.error){f.innerHTML="<p class='note'>Δεν μπορώ να φορτώσω τα αποτελέσματα αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο.</p>";return}
-  var o="<p class='note'>Ενημερώθηκε: "+esc(d.updated)+" · παράθυρο "+d.window_days+" ημερών</p>";
+  var o="<p class='note'>Ενημερώθηκε: "+esc(d.updated)+" · βάσει των τελευταίων "+d.live_total[1]+" live σημάτων με γνωστό αποτέλεσμα</p>";
   o+="<h2>Live σήματα</h2><div class='tbl'><table><tr><th>Κατηγορία</th><th>Βγήκαν</th><th>%</th><th></th></tr>";
   o+=row("Όλα τα live σήματα",d.live_total);
   var v=d.live_by_verdict||{};
